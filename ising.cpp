@@ -11,7 +11,8 @@ using namespace std;
 class World: public Matrix
 {
     double beta_;
-    default_random_engine generator_;
+    mt19937 generator_;
+    mt19937 generator2_;
     uniform_int_distribution<int> row_picker_;
     uniform_int_distribution<int> col_picker_;
     uniform_real_distribution<double> dist_;
@@ -21,13 +22,15 @@ class World: public Matrix
     
 public:
     using Matrix::Matrix; // c++11: matrix constructors
-    World(uint32_t rows, uint32_t cols, double temp=1.0)
+    World(uint32_t rows, uint32_t cols, double temp=1.0, int seed=0)
             : Matrix(rows, cols), beta_(1./temp),
               row_picker_(0, rows - 1), col_picker_(0, cols - 1)
     {
+        generator_.seed(seed);
+        generator2_.seed(seed + 1);
         rnd = bind(dist_, generator_);
         rnd_row = bind(row_picker_, generator_);
-        rnd_col = bind(col_picker_, generator_);
+        rnd_col = bind(col_picker_, generator2_);
     }
 
     void init(double fraction, int seed=0)
@@ -63,17 +66,17 @@ public:
             int col = rnd_col();
             auto val = get(row, col);
             double delta_E = 2 * val * neighbour_sum(row, col);
-            // printf("(%d,%d), ΔE = %.1f: ", row, col, delta_E);
+            // printf("(%d,%d), ΔE = %.1f: ", row, col, delta_E); ///
             // accept or reject?
             if (rnd() < exp(-beta_ * delta_E))
             {
                 set(row, col, -val);
                 changed = true;
-                // printf("accepted\n");
+                // printf("accepted\n"); ///
             }
             else
             {
-                // printf("rejected\n");
+                // printf("rejected\n"); ///
             }
         }
         return changed;
@@ -115,8 +118,11 @@ int main_txt(int generations, int steps_per_generation,
     struct winsize size;
     ioctl(STDOUT_FILENO,TIOCGWINSZ,&size);
 
-    World m(size.ws_row, size.ws_col, temp);
-    m.init(fraction, seed);
+    World m(size.ws_row, size.ws_col, temp, seed);
+    // World m(5,13, temp);
+    // printf("Size: %d x %d\n", size.ws_row, size.ws_col);
+    // exit(0);
+    m.init(fraction);
     m.print();
 
     for (int i = 0; i < generations; i++)
@@ -124,6 +130,7 @@ int main_txt(int generations, int steps_per_generation,
         this_thread::sleep_for(std::chrono::milliseconds(delay));
         m.update(steps_per_generation);
         m.print();
+        // printf("\n");printf("-------------\n"); ///
     }
     return 0;
 }
@@ -142,8 +149,8 @@ int main_fb(int fbfd, int generations, int steps_per_generation,
         exit(5);
     }
 
-    World m(vinfo.yres, vinfo.xres, temp);
-    m.init(fraction, seed);
+    World m(vinfo.yres, vinfo.xres, temp, seed);
+    m.init(fraction);
 
     long screensize = vinfo.xres * vinfo.yres * 4;
 
