@@ -184,7 +184,7 @@ int main_fb(int fbfd, int generations, int steps_per_generation,
 
 int main(int argc, char* argv[])
 {
-    if (argc > 1 and argv[1][0] == '?')
+    if (argc > 1 and argv[1][0] == 'h')
     {
         printf("Usage: "
                "%s <generations> <steps_per_generation> <delay (ms)> <init fraction> <seed> <prefer_txt> <temp>\n",
