@@ -12,17 +12,25 @@ Finally, the text-based output will look better or worse depending on the termin
 
 Compile the executable by invoking `make`. This will generate the program `ising`. When run with a single argument `?`, usage information is displayed, namely 
 
-    Usage: ./ising <generations> <steps_per_generation> <delay (ms)> <init fraction> <seed> <prefer_txt> <temp>
+    Usage: ./ising <temp> <steps_per_generation> <delay (ms)> <init fraction> <seed> <prefer_txt>
 
-* <generations> (default 100000) is the number of generations you want to visualize
+* <temp> is the temperature in natural units (k = 1). The Curie temperature is around 2.269.
 * <steps_per_generation> (default 1000) is the number of changes tried per generation
 * <delay> (default 200 ms) is the time in milliseconds that you want to wait between generations. You can make this as short as you want, but when it is too short to finish drawing one generation before refreshing it, it won't look very smooth.
 * <init fraction> is a number between 0 and 1 with the proportion of live cells
 * <seed> is an integer that seeds the random generator
 * set <prefer_txt> to 1 if you want to have text output, even if the framebuffer is available.
-* <temp> is the temperature in natural units (k = 1). The Curie temperature is around 2.269.
 
 When executed, it will visualize the specified number of generations, and return to the command line (note that the framebuffer contents will not be erased before it is explicitly overwritten). Ctrl-C to exit prematurely.
+
+In text mode, there is interaction as well. For now, you have to enter after your command(s). Commands are
+
+* i     -- toggle info display
+* h,c   -- hotter, colder
+* f,s   -- faster, slower
+* m,l   -- more, less
+* w     -- step in Wolff cluster algorithm
+* q     -- quit
 
 ### Notes ###
 
