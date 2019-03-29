@@ -105,14 +105,8 @@ public:
     {
         uint32_t R = getRows();
         uint32_t C = getCols();
-        uint32_t startrow = 0;
-        if (info != "")
-        {
-            startrow = 1;
-            cout << info << endl;
-        }
         
-        for (uint32_t r = startrow; r < R; r++)
+        for (uint32_t r = 0; r < R; r++)
         {
             for (uint32_t c = 0; c < C; c++)
             {
@@ -124,7 +118,8 @@ public:
                 putchar('\n');
             }
         }
-        cout << flush;
+        printf("%c[%d;%df",0x1B,0,0); // put cursor at 0,0 
+        cout << info << flush;
     }
 };
     
@@ -175,33 +170,24 @@ public:
     // Delay in integer milliseconds
     uint32_t get_delay() const
     {
-        return uint32_t(delay_ + .5);
+        return uint32_t(delay_ + .49);
     }
 
     uint32_t get_steps_per_generation() const
     {
-        return uint32_t(steps_per_generation_ + 0.5);
+        return uint32_t(steps_per_generation_ + 0.49);
     }
 
     string info_string() const // could add help
     {
-        //ostringstream ret;
-        
         if (show_info_)
         {
-            /*
-            ret << "Temperature: " << world_->get_temp() << "  "
-                << "Magnetization: " << world_->net_magnetization() << "  "
-                << "Delay: " << get_delay() << " ms  "
-                << "Steps per generation: " << get_steps_per_generation() << "  "
-                << "Commands: hcfsmliwq";
-            */
             auto format =
                 "  Temperature: %.6f"
-                "  Magnetization: %.3f"
+                "  Magnetization: % .3f"
                 "  Delay: %d ms"
                 "  Steps per generation: %d"
-                "  Commands: hcfsmliwq";
+                "  Commands: hcfsmliwq  ";
             int len = snprintf(nullptr, 0, format,
                                world_->get_temp(), world_->net_magnetization(),
                                get_delay(), get_steps_per_generation()) + 1;
@@ -216,12 +202,16 @@ public:
         {
             return "";
         }
-        // return ret.str();
     }
 
     void toggle_info()
     {
         show_info_ = !show_info_;
+    }
+
+    void sleep_for() const
+    {
+        this_thread::sleep_for(std::chrono::milliseconds(get_delay()));
     }
     
     // Returns whether to exit
@@ -272,9 +262,6 @@ int main_txt(int steps_per_generation,
     ioctl(STDOUT_FILENO,TIOCGWINSZ,&size);
 
     World m(size.ws_row, size.ws_col, temp, seed);
-    // World m(5,13, temp);
-    // printf("Size: %d x %d\n", size.ws_row, size.ws_col);
-    // exit(0);
     m.init(fraction);
     m.print("");
 
@@ -286,8 +273,8 @@ int main_txt(int steps_per_generation,
         {
             break;
         }
-        
-        this_thread::sleep_for(std::chrono::milliseconds(interaction.get_delay()));
+
+        interaction.sleep_for();
         m.update(interaction.get_steps_per_generation());
         m.print(interaction.info_string());
     }
@@ -325,13 +312,25 @@ int main_fb(int fbfd, int steps_per_generation,
     // write matrix to framebuffer
     auto setter = [&green, &red](auto x){return x == 1? green : red;};
     transform(begin(m.data()), end(m.data()), fbp, setter);
+
+    Interaction interaction(&m, delay, steps_per_generation);
     
     while (true)
     {
-        this_thread::sleep_for(chrono::milliseconds(delay));
-        m.update(steps_per_generation);
+        if (interaction.check_for_key() == Interaction::EXIT)
+        {
+            break;
+        }
+        
+        interaction.sleep_for();
+        m.update(interaction.get_steps_per_generation());
         transform(begin(m.data()), end(m.data()), fbp, setter);
         msync(fbp, screensize, MS_SYNC);
+        // put cursor at position 2,2
+        // printf("%c[%d;%df%s",0x1B,2,2, interaction.info_string().c_str()); 
+        // Flickers. Improve by directly writing into the frame buffer.
+        printf("%c[%d;%df",0x1B,2,2); 
+        cout << interaction.info_string() << flush;
     }
         
     // cleanup

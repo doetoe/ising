@@ -44,6 +44,14 @@ The Ising model is a simple model in statistical mechanics of a 2D lattice of ma
 
 In this implementation, successive states are generated following the Metropolis algorithm using the Boltzmann distribution for the specified temperature.
 
+### Todo ###
+
+* Wolff cluster algorithm
+* Make info display nices: flicker, layout, etc
+* Don't require enter for single letter commands, don't buffer
+* Don't echo keyboard input/output
+* Update values not in display refresh loop
+
 ### Contact ###
 
 doetoe@protonmail.com
