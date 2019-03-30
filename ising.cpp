@@ -6,6 +6,8 @@
 #include <thread>
 #include <cwchar>
 #include <functional>
+#include <utility>
+#include <unordered_set>
 using namespace std;
 
 class World: public Matrix
@@ -13,12 +15,48 @@ class World: public Matrix
     double beta_;
     mt19937 generator_;
     mt19937 generator2_;
-    uniform_int_distribution<int> row_picker_;
-    uniform_int_distribution<int> col_picker_;
+    uniform_int_distribution<uint32_t> row_picker_;
+    uniform_int_distribution<uint32_t> col_picker_;
     uniform_real_distribution<double> dist_;
     function<double()> rnd;
-    function<int()> rnd_row;
-    function<int()> rnd_col;
+    function<uint32_t()> rnd_row;
+    function<uint32_t()> rnd_col;
+    
+    struct Point
+    {
+        uint32_t row;
+        uint32_t col;
+    };
+
+    struct point_hash {
+        size_t operator()(const Point& p) const {
+            return p.row*31 + p.col;
+        }
+    };
+
+    struct point_equal {
+        bool operator()(const Point& p, const Point& q) const {
+            return p.row == q.row and p.col == q.col;
+        }
+    };
+
+    struct Neighbours
+    {
+        const World& world;
+        vector<Point> points;
+        Neighbours(const World& world, const Point& point)
+                : world(world)
+        {
+            auto row = point.row;
+            auto col = point.col;
+            auto R = world.getRows();
+            auto C = world.getCols();
+            points = {Point{(row + 1) % R, col},
+                      Point{(row - 1 + R) % R, col},
+                      Point{row, (col + 1) % C},
+                      Point{row, (col - 1 + C) % C}};
+        }
+    };
     
 public:
     using Matrix::Matrix; // c++11: matrix constructors
@@ -34,6 +72,16 @@ public:
         rnd_col = bind(col_picker_, generator2_);
     }
 
+    int8_t getp(Point p) const
+    {
+        return get(p.row, p.col);
+    }
+    
+    void setp(Point p, int8_t val)
+    {
+        set(p.row, p.col, val);
+    }
+    
     void init(double fraction, int seed=0)
     {
         bernoulli_distribution dist(fraction);
@@ -96,9 +144,43 @@ public:
         return changed;
     }
     
-    void wolff_update(int n=1) 
+    void wolff_update()
     {
-        // to be implemented
+        // value for p for which rejection rate is 0: full Boltzmann 
+        // statistics are obtained from conditions for cluster growth. 
+        double p = 1.0 - exp(-2.0 * beta_);
+        Point k{rnd_row(), rnd_col()};
+        vector<Point> pocket{k};
+        unordered_set<Point, point_hash, point_equal>cluster({k});
+        while (!pocket.empty())
+        {
+            // choose random element from pocket and determine which
+            // of its neighbours to add (same spin and probability)
+            uniform_int_distribution<uint32_t> point_picker(0, pocket.size() - 1);
+            auto rnd_index = point_picker(generator_);
+            // swap so that last element can be easily popped when done
+            swap(pocket[rnd_index], pocket.back());
+            auto j = pocket.back();
+            Neighbours j_neighbours(*this, j);
+            for (auto& l : j_neighbours.points)
+            {
+                if (getp(l) == getp(j) and cluster.find(l) == cluster.end() and rnd() < p)
+                {
+                    // add l to pocket, and to cluster
+                    pocket.push_back(l);
+                    // make sure the previously selected element of the pocket
+                    // stays at the back
+                    swap(pocket[0], pocket.back());
+                    cluster.emplace(l);
+                }   
+            }
+            pocket.pop_back();
+        }
+        // flip all element of the cluster
+        for (auto& j : cluster)
+        {
+            setp(j, -getp(j));
+        }
     }
     
     void print(const string& info) const
@@ -133,6 +215,7 @@ public:
 #include <fcntl.h>
 #include <linux/fb.h>
 #include <sys/mman.h>
+#include <termios.h>
 
 class Interaction
 {
@@ -141,6 +224,7 @@ class Interaction
     bool show_info_;
     double delay_;
     double steps_per_generation_;
+    struct termios tty_config_;
     
 public:
     enum KeyAction {EXIT, CONTINUE};
@@ -149,7 +233,12 @@ public:
             : world_(world), c('\0'), show_info_(false), delay_(delay),
               steps_per_generation_(steps_per_generation)
     {
-        fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);  // make the reads non-blocking
+        fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);   // make the reads non-blocking
+        tcgetattr(STDIN_FILENO, &tty_config_);
+        tty_config_.c_lflag &= ~(ECHO | ICANON);    // no echo, no buffering
+        // config.c_cc[VMIN]  = 1;                  // one character is enough
+        // config.c_cc[VTIME] = 0;                  //
+        tcsetattr(STDIN_FILENO, TCSAFLUSH, &tty_config_);
     }
 
     void change_temp(double factor)
@@ -157,6 +246,23 @@ public:
         world_->set_temp(world_->get_temp() * factor);
     }
 
+    void raise_delay()
+    {
+        if (delay_ < 10)
+            delay_ += 1;
+        else if (delay_ < 500)
+            delay_ += 10;
+    }
+    
+    void lower_delay()
+    {
+        if (delay_ > 10)
+            delay_ -= 10;
+        else if (delay_ > 0)
+            delay_ -= 1;
+    }
+    
+    // unused
     void change_delay(double factor)
     {
         delay_ *= factor;
@@ -229,10 +335,12 @@ public:
                     change_temp(1/1.1);
                     break;
                 case 'f': // faster
-                    change_delay(1/1.1);
+                    // change_delay(1/1.1);
+                    lower_delay();
                     break;
                 case 's': // slower
-                    change_delay(1.1);
+                    // change_delay(1.1);
+                    raise_delay();
                     break;
                 case 'm': // more
                     change_steps_per_generation(1.1);
@@ -250,6 +358,7 @@ public:
                     return EXIT;
             }
         }
+        tcflush(STDIN_FILENO, TCIFLUSH); // discard waiting input
         return CONTINUE;
     }
 };
@@ -329,8 +438,12 @@ int main_fb(int fbfd, int steps_per_generation,
         // put cursor at position 2,2
         // printf("%c[%d;%df%s",0x1B,2,2, interaction.info_string().c_str()); 
         // Flickers. Improve by directly writing into the frame buffer.
-        printf("%c[%d;%df",0x1B,2,2); 
-        cout << interaction.info_string() << flush;
+        string info = interaction.info_string();
+        if (info != "")
+        {
+            printf("%c[%d;%df",0x1B,2,2); 
+            cout << interaction.info_string() << flush;
+        }
     }
         
     // cleanup

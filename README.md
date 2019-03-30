@@ -46,10 +46,7 @@ In this implementation, successive states are generated following the Metropolis
 
 ### Todo ###
 
-* Wolff cluster algorithm
 * Make info display nices: flicker, layout, etc
-* Don't require enter for single letter commands, don't buffer
-* Don't echo keyboard input/output
 * Update values not in display refresh loop
 
 ### Contact ###
