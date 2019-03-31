@@ -118,10 +118,8 @@ public:
             get(row, (col - 1 + C) % C);
     }
 
-    bool update(int n=1) 
+    void update_metropolis(int n=1) 
     {
-        bool changed = false;
-        
         for (int i = 0; i < n; i++)
         {
             int row = rnd_row();
@@ -133,7 +131,6 @@ public:
             if (rnd() < exp(-beta_ * delta_E))
             {
                 set(row, col, -val);
-                changed = true;
                 // printf("accepted\n"); ///
             }
             else
@@ -141,45 +138,47 @@ public:
                 // printf("rejected\n"); ///
             }
         }
-        return changed;
     }
     
-    void wolff_update()
+    void update_wolff(int n=1)
     {
-        // value for p for which rejection rate is 0: full Boltzmann 
-        // statistics are obtained from conditions for cluster growth. 
-        double p = 1.0 - exp(-2.0 * beta_);
-        Point k{rnd_row(), rnd_col()};
-        vector<Point> pocket{k};
-        unordered_set<Point, point_hash, point_equal>cluster({k});
-        while (!pocket.empty())
+        for (int i = 0; i < n; i++)
         {
-            // choose random element from pocket and determine which
-            // of its neighbours to add (same spin and probability)
-            uniform_int_distribution<uint32_t> point_picker(0, pocket.size() - 1);
-            auto rnd_index = point_picker(generator_);
-            // swap so that last element can be easily popped when done
-            swap(pocket[rnd_index], pocket.back());
-            auto j = pocket.back();
-            Neighbours j_neighbours(*this, j);
-            for (auto& l : j_neighbours.points)
+            // value for p for which rejection rate is 0: full Boltzmann 
+            // statistics are obtained from conditions for cluster growth. 
+            double p = 1.0 - exp(-2.0 * beta_);
+            Point k{rnd_row(), rnd_col()};
+            vector<Point> pocket{k};
+            unordered_set<Point, point_hash, point_equal>cluster({k});
+            while (!pocket.empty())
             {
-                if (getp(l) == getp(j) and cluster.find(l) == cluster.end() and rnd() < p)
+                // choose random element from pocket and determine which
+                // of its neighbours to add (same spin and probability)
+                uniform_int_distribution<uint32_t> point_picker(0, pocket.size() - 1);
+                auto rnd_index = point_picker(generator_);
+                // swap so that last element can be easily popped when done
+                swap(pocket[rnd_index], pocket.back());
+                auto j = pocket.back();
+                Neighbours j_neighbours(*this, j);
+                for (auto& l : j_neighbours.points)
                 {
-                    // add l to pocket, and to cluster
-                    pocket.push_back(l);
-                    // make sure the previously selected element of the pocket
-                    // stays at the back
-                    swap(pocket[0], pocket.back());
-                    cluster.emplace(l);
-                }   
+                    if (getp(l) == getp(j) and cluster.find(l) == cluster.end() and rnd() < p)
+                    {
+                        // add l to pocket, and to cluster
+                        pocket.push_back(l);
+                        // make sure the previously selected element of the pocket
+                        // stays at the back
+                        swap(pocket[0], pocket.back());
+                        cluster.emplace(l);
+                    }   
+                }
+                pocket.pop_back();
             }
-            pocket.pop_back();
-        }
-        // flip all element of the cluster
-        for (auto& j : cluster)
-        {
-            setp(j, -getp(j));
+            // flip all element of the cluster
+            for (auto& j : cluster)
+            {
+                setp(j, -getp(j));
+            }
         }
     }
     
@@ -200,7 +199,8 @@ public:
                 putchar('\n');
             }
         }
-        printf("%c[%d;%df",0x1B,0,0); // put cursor at 0,0 
+        // hide visibility cursor and put cursor at 0,0 
+        printf("%c[?25l%c[%d;%df",0x1B,0x1B,0,0); 
         cout << info << flush;
     }
 };
@@ -219,28 +219,49 @@ public:
 
 class Interaction
 {
+    enum UpdateAlgorithm {METROPOLIS, WOLFF};
+    
     World* world_;
     unsigned char c;
     bool show_info_;
+    UpdateAlgorithm algorithm_;
     double delay_;
-    double steps_per_generation_;
+    double steps_per_generation_; // For Wolff, 1/1000 of this is taken
+    struct termios tty_config_orig_;
     struct termios tty_config_;
+
+    // Returns the leading digit of a number.
+    // The factor 1.0001 ensures that this goes well up to around 3 
+    // significant decimal digits
+    static long main_digit(double x)
+    {
+        double intpart;
+        return lround(pow(10, modf(log(x * 1.0001) / log(10), &intpart)));
+    }
     
 public:
     enum KeyAction {EXIT, CONTINUE};
-        
+    
     Interaction(World* world, double delay, uint32_t steps_per_generation)
             : world_(world), c('\0'), show_info_(false), delay_(delay),
               steps_per_generation_(steps_per_generation)
     {
-        fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);   // make the reads non-blocking
         tcgetattr(STDIN_FILENO, &tty_config_);
+        tty_config_orig_ = tty_config_;
+        fcntl(STDIN_FILENO, F_SETFL, O_NONBLOCK);   // make the reads non-blocking
         tty_config_.c_lflag &= ~(ECHO | ICANON);    // no echo, no buffering
         // config.c_cc[VMIN]  = 1;                  // one character is enough
         // config.c_cc[VTIME] = 0;                  //
         tcsetattr(STDIN_FILENO, TCSAFLUSH, &tty_config_);
     }
 
+    ~Interaction()
+    {
+        printf("%c[?25h", 0x1b); // show cursor
+        tcsetattr(STDIN_FILENO, TCSANOW, &tty_config_orig_);
+    }
+    
+    
     void change_temp(double factor)
     {
         world_->set_temp(world_->get_temp() * factor);
@@ -261,13 +282,64 @@ public:
         else if (delay_ > 0)
             delay_ -= 1;
     }
+
+    void change_algorithm()
+    {
+        switch (algorithm_)
+        {
+            case METROPOLIS:
+                algorithm_ = WOLFF;
+                if (steps_per_generation_ < 1000)
+                    steps_per_generation_ = 1000;
+                break;
+            case WOLFF:
+                algorithm_ = METROPOLIS;
+                break;
+        }
+    }
     
     // unused
     void change_delay(double factor)
     {
         delay_ *= factor;
     }
+    
+    void raise_steps_per_generation()
+    {
+        switch (main_digit(steps_per_generation_))
+        {
+            case 1:
+            case 5:
+                steps_per_generation_ *= 2;
+                break;
+            case 2:
+                steps_per_generation_ *= 2.5;
+                break;
+            default:
+                steps_per_generation_ *= 10;
+        }
+    }
 
+    void lower_steps_per_generation()
+    {
+        if (get_steps_per_generation() >= 2)
+        {
+            switch (main_digit(steps_per_generation_))
+            {
+                case 1:
+                case 2:
+                    steps_per_generation_ *= 0.5;
+                    break;
+                case 5:
+                    steps_per_generation_ *= 0.4;
+                    break;
+                default:
+                    steps_per_generation_ *= 0.1;
+            }
+        }
+    }
+
+    // unused
     void change_steps_per_generation(double factor)
     {
         steps_per_generation_ *= factor;
@@ -281,7 +353,7 @@ public:
 
     uint32_t get_steps_per_generation() const
     {
-        return uint32_t(steps_per_generation_ + 0.49);
+        return uint32_t(steps_per_generation_ * (algorithm_ == WOLFF ? 0.001 : 1) + .9999);
     }
 
     string info_string() const // could add help
@@ -289,16 +361,19 @@ public:
         if (show_info_)
         {
             auto format =
+                "  Algorithm: %s"
                 "  Temperature: %.6f"
                 "  Magnetization: % .3f"
                 "  Delay: %d ms"
                 "  Steps per generation: %d"
-                "  Commands: hcfsmliwq  ";
+                "  Commands: hcfsmliwaq  ";
             int len = snprintf(nullptr, 0, format,
+                               algorithm_ == WOLFF ? "Wolff" : "Metropolis",
                                world_->get_temp(), world_->net_magnetization(),
                                get_delay(), get_steps_per_generation()) + 1;
             vector<char> chars(len);
             snprintf(&chars[0], chars.size(), format,
+                     algorithm_ == WOLFF ? "Wolff" : "Metropolis",
                      world_->get_temp(), world_->net_magnetization(),
                      get_delay(), get_steps_per_generation());
             
@@ -315,6 +390,18 @@ public:
         show_info_ = !show_info_;
     }
 
+    void update()
+    {
+        if (algorithm_ == WOLFF)
+        {
+            world_->update_wolff(get_steps_per_generation());
+        }
+        else if (algorithm_ == METROPOLIS)
+        {
+            world_->update_metropolis(get_steps_per_generation());
+        }
+    }
+    
     void sleep_for() const
     {
         this_thread::sleep_for(std::chrono::milliseconds(get_delay()));
@@ -323,8 +410,7 @@ public:
     // Returns whether to exit
     KeyAction check_for_key()
     {
-        if (read(fileno(stdin), &c, 1) > 0)
-            // c = getchar();
+        if (read(STDIN_FILENO, &c, 1) > 0)
         {
             switch (c)
             {
@@ -335,24 +421,25 @@ public:
                     change_temp(1/1.1);
                     break;
                 case 'f': // faster
-                    // change_delay(1/1.1);
                     lower_delay();
                     break;
                 case 's': // slower
-                    // change_delay(1.1);
                     raise_delay();
                     break;
                 case 'm': // more
-                    change_steps_per_generation(1.1);
+                    raise_steps_per_generation();
                     break;
                 case 'l': // less
-                    change_steps_per_generation(1/1.1);
+                    lower_steps_per_generation();
                     break;
                 case 'i': // info
                     toggle_info();
                     break;
                 case 'w': // Wolff
-                    world_->wolff_update();
+                    world_->update_wolff();
+                    break;
+                case 'a': // algorithm
+                    change_algorithm();
                     break;
                 case 'q':
                     return EXIT;
@@ -376,6 +463,8 @@ int main_txt(int steps_per_generation,
 
     Interaction interaction(&m, delay, steps_per_generation);
     
+    // printf("%c[?25l\n", 0x1b); // hide cursor
+
     while (true)
     {
         if (interaction.check_for_key() == Interaction::EXIT)
@@ -384,7 +473,7 @@ int main_txt(int steps_per_generation,
         }
 
         interaction.sleep_for();
-        m.update(interaction.get_steps_per_generation());
+        interaction.update();
         m.print(interaction.info_string());
     }
     return 0;
@@ -423,6 +512,8 @@ int main_fb(int fbfd, int steps_per_generation,
     transform(begin(m.data()), end(m.data()), fbp, setter);
 
     Interaction interaction(&m, delay, steps_per_generation);
+
+    printf("%c[?25l\n", 0x1b); // hide cursor
     
     while (true)
     {
@@ -432,7 +523,7 @@ int main_fb(int fbfd, int steps_per_generation,
         }
         
         interaction.sleep_for();
-        m.update(interaction.get_steps_per_generation());
+        interaction.update();
         transform(begin(m.data()), end(m.data()), fbp, setter);
         msync(fbp, screensize, MS_SYNC);
         // put cursor at position 2,2
@@ -469,7 +560,7 @@ int main(int argc, char* argv[])
     double fraction = (argc > 4) ? atof(argv[4]) : 0.5;
     int seed = (argc > 5) ? atoi(argv[5]) : 0;
     bool prefer_txt = (argc > 6) ? bool(atoi(argv[6])) : false;
-    
+
     if (not prefer_txt)
     {
         // Try to open the framebuffer for reading and writing

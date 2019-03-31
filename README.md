@@ -30,6 +30,7 @@ In text mode, there is interaction as well. For now, you have to enter after you
 * f,s   -- faster, slower
 * m,l   -- more, less
 * w     -- step in Wolff cluster algorithm
+* a     -- change algorithm (Wolff/Metropolis)
 * q     -- quit
 
 ### Notes ###
@@ -48,6 +49,10 @@ In this implementation, successive states are generated following the Metropolis
 
 * Make info display nices: flicker, layout, etc
 * Update values not in display refresh loop
+* Load/save states
+* Roll (translate)
+* Better help texts
+* Other screen sizes
 
 ### Contact ###
 
