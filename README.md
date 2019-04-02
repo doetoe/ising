@@ -53,6 +53,8 @@ In this implementation, successive states are generated following the Metropolis
 * Roll (translate)
 * Better help texts
 * Other screen sizes
+* Output/write statistics to file
+* Display acceptance rate
 
 ### Contact ###
 

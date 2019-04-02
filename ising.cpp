@@ -118,8 +118,9 @@ public:
             get(row, (col - 1 + C) % C);
     }
 
-    void update_metropolis(int n=1) 
+    uint32_t update_metropolis(int n=1) 
     {
+        uint32_t accepted = 0;
         for (int i = 0; i < n; i++)
         {
             int row = rnd_row();
@@ -131,6 +132,7 @@ public:
             if (rnd() < exp(-beta_ * delta_E))
             {
                 set(row, col, -val);
+                accepted++;
                 // printf("accepted\n"); ///
             }
             else
@@ -138,9 +140,10 @@ public:
                 // printf("rejected\n"); ///
             }
         }
+        return accepted;
     }
     
-    void update_wolff(int n=1)
+    uint32_t update_wolff(int n=1)
     {
         for (int i = 0; i < n; i++)
         {
@@ -180,6 +183,7 @@ public:
                 setp(j, -getp(j));
             }
         }
+        return n;
     }
     
     void print(const string& info) const
@@ -230,6 +234,10 @@ class Interaction
     struct termios tty_config_orig_;
     struct termios tty_config_;
 
+    // The number of steps since the last change of parameters.
+    uint32_t steps_;
+    uint32_t accepted_;
+
     // Returns the leading digit of a number.
     // The factor 1.0001 ensures that this goes well up to around 3 
     // significant decimal digits
@@ -244,7 +252,8 @@ public:
     
     Interaction(World* world, double delay, uint32_t steps_per_generation)
             : world_(world), c('\0'), show_info_(false), delay_(delay),
-              steps_per_generation_(steps_per_generation)
+              steps_per_generation_(steps_per_generation),
+              steps_(0), accepted_(0)
     {
         tcgetattr(STDIN_FILENO, &tty_config_);
         tty_config_orig_ = tty_config_;
@@ -356,6 +365,11 @@ public:
         return uint32_t(steps_per_generation_ * (algorithm_ == WOLFF ? 0.001 : 1) + .9999);
     }
 
+    double get_acceptance_rate() const
+    {
+        return steps_ == 0 ? 1 : double(accepted_) / steps_;
+    }
+
     string info_string() const // could add help
     {
         if (show_info_)
@@ -366,16 +380,19 @@ public:
                 "  Magnetization: % .3f"
                 "  Delay: %d ms"
                 "  Steps per generation: %d"
+                "  Acceptance rate: %.6f" 
                 "  Commands: hcfsmliwaq  ";
             int len = snprintf(nullptr, 0, format,
                                algorithm_ == WOLFF ? "Wolff" : "Metropolis",
                                world_->get_temp(), world_->net_magnetization(),
-                               get_delay(), get_steps_per_generation()) + 1;
+                               get_delay(), get_steps_per_generation(),
+                               get_acceptance_rate()) + 1;
             vector<char> chars(len);
             snprintf(&chars[0], chars.size(), format,
                      algorithm_ == WOLFF ? "Wolff" : "Metropolis",
                      world_->get_temp(), world_->net_magnetization(),
-                     get_delay(), get_steps_per_generation());
+                     get_delay(), get_steps_per_generation(),
+                     get_acceptance_rate());
             
             return string(&chars[0]);
         }
@@ -392,13 +409,14 @@ public:
 
     void update()
     {
+        steps_ += get_steps_per_generation();
         if (algorithm_ == WOLFF)
         {
-            world_->update_wolff(get_steps_per_generation());
+            accepted_ += world_->update_wolff(get_steps_per_generation());
         }
         else if (algorithm_ == METROPOLIS)
         {
-            world_->update_metropolis(get_steps_per_generation());
+            accepted_ += world_->update_metropolis(get_steps_per_generation());
         }
     }
     
@@ -414,11 +432,14 @@ public:
         {
             switch (c)
             {
+                // reset acceptance rate when changing parameters.
                 case 'h': // hotter
                     change_temp(1.1);
+                    steps_ = accepted_ = 0;
                     break;
                 case 'c': // colder
                     change_temp(1/1.1);
+                    steps_ = accepted_ = 0;
                     break;
                 case 'f': // faster
                     lower_delay();
@@ -437,9 +458,11 @@ public:
                     break;
                 case 'w': // Wolff
                     world_->update_wolff();
+                    steps_ = accepted_ = 0;
                     break;
                 case 'a': // algorithm
                     change_algorithm();
+                    steps_ = accepted_ = 0;
                     break;
                 case 'q':
                     return EXIT;
