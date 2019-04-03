@@ -52,9 +52,8 @@ In this implementation, successive states are generated following the Metropolis
 * Load/save states
 * Roll (translate)
 * Better help texts
-* Other screen sizes
-* Output/write statistics to file
-* Display acceptance rate
+* Other screen sizes and non-graphical execution
+* Output/write statistics to file + companion graph visualization program
 
 ### Contact ###
 

@@ -151,31 +151,31 @@ public:
             // statistics are obtained from conditions for cluster growth. 
             double p = 1.0 - exp(-2.0 * beta_);
             Point k{rnd_row(), rnd_col()};
-            vector<Point> pocket{k};
+            vector<Point> frontier{k};
             unordered_set<Point, point_hash, point_equal>cluster({k});
-            while (!pocket.empty())
+            while (!frontier.empty())
             {
-                // choose random element from pocket and determine which
-                // of its neighbours to add (same spin and probability)
-                uniform_int_distribution<uint32_t> point_picker(0, pocket.size() - 1);
-                auto rnd_index = point_picker(generator_);
-                // swap so that last element can be easily popped when done
-                swap(pocket[rnd_index], pocket.back());
-                auto j = pocket.back();
+                // choose random element from frontier and place it at the 
+                // beginning (so that it can be easily removed when done)
+                uniform_int_distribution<uint32_t> point_picker(0, frontier.size() - 1);
+                swap(frontier[point_picker(generator_)], frontier[0]);
+                auto j = frontier[0]; // this is the random frontier element
+                // determine which of its neighbours to add to cluser
+                // (with probability p if it has the same spin)
                 Neighbours j_neighbours(*this, j);
                 for (auto& l : j_neighbours.points)
                 {
+                    // Could leave test that l is in cluster out. What is faster? Check
                     if (getp(l) == getp(j) and cluster.find(l) == cluster.end() and rnd() < p)
                     {
-                        // add l to pocket, and to cluster
-                        pocket.push_back(l);
-                        // make sure the previously selected element of the pocket
-                        // stays at the back
-                        swap(pocket[0], pocket.back());
+                        // add l to frontier, and to cluster
+                        frontier.push_back(l);
                         cluster.emplace(l);
                     }   
                 }
-                pocket.pop_back();
+                // Remove element from frontier
+                swap(frontier[0], frontier.back());
+                frontier.pop_back();
             }
             // flip all element of the cluster
             for (auto& j : cluster)
@@ -569,15 +569,15 @@ int main_fb(int fbfd, int steps_per_generation,
 
 int main(int argc, char* argv[])
 {
-    if ((argc > 1 and argv[1][0] == 'h') or argc > 7)
+    if (argc == 1 or argv[1][0] == 'h' or argc > 7)
     {
         printf("Usage: "
-               "%s <temp> <steps_per_generation> <delay (ms)> <init fraction> <seed> <prefer_txt>\n",
+               "%s <temp> [steps_per_generation] [delay (ms)] [init fraction] [seed] [prefer_txt]\n",
                argv[0]);
         exit(0);
     }
     
-    double temp = (argc > 1) ? atof(argv[1]) : 1.0;
+    double temp = (argc > 1) ? atof(argv[1]) : 1.0; // will exit if unspecified (above)
     int steps_per_generation = (argc > 2) ? atoi(argv[2]) : 1000;
     int delay = (argc > 3) ? atoi(argv[3]) : 200;
     double fraction = (argc > 4) ? atof(argv[4]) : 0.5;
