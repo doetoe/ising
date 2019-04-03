@@ -155,11 +155,11 @@ public:
             unordered_set<Point, point_hash, point_equal>cluster({k});
             while (!frontier.empty())
             {
-                // choose random element from frontier and place it at the 
-                // beginning (so that it can be easily removed when done)
+                // choose random element from frontier and remove it
                 uniform_int_distribution<uint32_t> point_picker(0, frontier.size() - 1);
-                swap(frontier[point_picker(generator_)], frontier[0]);
-                auto j = frontier[0]; // this is the random frontier element
+                swap(frontier[point_picker(generator_)], frontier.back());
+                auto j = frontier.back();   // this is the random frontier element
+                frontier.pop_back();        // remove from frontier
                 // determine which of its neighbours to add to cluser
                 // (with probability p if it has the same spin)
                 Neighbours j_neighbours(*this, j);
@@ -168,14 +168,11 @@ public:
                     // Could leave test that l is in cluster out. What is faster? Check
                     if (getp(l) == getp(j) and cluster.find(l) == cluster.end() and rnd() < p)
                     {
-                        // add l to frontier, and to cluster
+                        // add l to frontier and to cluster
                         frontier.push_back(l);
                         cluster.emplace(l);
                     }   
                 }
-                // Remove element from frontier
-                swap(frontier[0], frontier.back());
-                frontier.pop_back();
             }
             // flip all element of the cluster
             for (auto& j : cluster)
@@ -280,13 +277,17 @@ public:
     {
         if (delay_ < 10)
             delay_ += 1;
-        else if (delay_ < 500)
+        else if (delay_ < 200)
             delay_ += 10;
+        else if (delay_ < 500)
+            delay_ += 100;
     }
     
     void lower_delay()
     {
-        if (delay_ > 10)
+        if (delay_ > 200)
+            delay_ -= 100;
+        else if (delay_ > 10)
             delay_ -= 10;
         else if (delay_ > 0)
             delay_ -= 1;
