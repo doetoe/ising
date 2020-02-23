@@ -41,13 +41,13 @@ In text mode, there is interaction as well. For now, you have to enter after you
 
 ### The Ising Model ###
 
-The Ising model is a simple model in statistical mechanics of a 2D lattice of magnatic dipoles, whose energy is obtained as the sum of the pairwise energies, where aligned direct (horizontal or vertical) neighbours contribute 1, and opposite dipoles contribute -1. It is known that there is a phase transition around a temperature of 2.269, the Curie temperature, above which it behaves as a paramagnetic material: there is no global magnetization, and below which it behaves as a ferromagnetic material, in which globally all spins tend to align.
+The Ising model is a simple model in statistical mechanics of a 2D lattice of magnatic dipoles, whose energy is obtained as the sum of the pairwise energies, where aligned direct (horizontal or vertical) neighbours contribute 1, and opposite dipoles contribute -1. It is known that there is a phase transition around a temperature of 2.269, the [Curie temperature](https://en.wikipedia.org/wiki/Curie_temperature), above which it behaves as a [paramagnetic material](https://en.wikipedia.org/wiki/Paramagnetism): there is no global magnetization, and below which it behaves as a [ferromagnetic material](https://en.wikipedia.org/wiki/Ferromagnetism), in which all spins tend to align.
 
-In this implementation, successive states are generated following the Metropolis algorithm using the Boltzmann distribution for the specified temperature.
+In this implementation, successive states are generated following the [Metropolis algorithm](https://en.wikipedia.org/wiki/Metropolis%E2%80%93Hastings_algorithm) using the [Boltzmann distribution](https://en.wikipedia.org/wiki/Boltzmann_distribution) for the specified temperature. Optionally the algorithm can be changed to the [Wolff cluster algorithm](https://en.wikipedia.org/wiki/Wolff_algorithm), which samples the state space much more efficiently, but is visually less interesting.
 
 ### Todo ###
 
-* Make info display nices: flicker, layout, etc
+* Improve information display: flicker, layout, etc
 * Update values not in display refresh loop
 * Load/save states
 * Roll (translate)
@@ -57,4 +57,4 @@ In this implementation, successive states are generated following the Metropolis
 
 ### Contact ###
 
-doetoe@protonmail.com
+doetoe@gmail.com
