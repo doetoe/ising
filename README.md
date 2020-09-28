@@ -57,4 +57,4 @@ In this implementation, successive states are generated following the [Metropoli
 
 ### Contact ###
 
-doetoe@gmail.com
+doetoe@protonmail.com
