@@ -299,8 +299,9 @@ public:
         {
             case METROPOLIS:
                 algorithm_ = WOLFF;
-                if (steps_per_generation_ < 1000)
-                    steps_per_generation_ = 1000;
+                // always go to 1 step per generation, since it may be slow
+                // if (steps_per_generation_ < 1000)
+                steps_per_generation_ = 1000;
                 break;
             case WOLFF:
                 algorithm_ = METROPOLIS;
