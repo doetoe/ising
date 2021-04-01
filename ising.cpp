@@ -8,6 +8,8 @@
 #include <functional>
 #include <utility>
 #include <unordered_set>
+#include <fstream>
+#include <algorithm>
 using namespace std;
 
 class World: public Matrix
@@ -383,7 +385,7 @@ public:
                 "  Delay: %d ms"
                 "  Steps per generation: %d"
                 "  Acceptance rate: %.6f" 
-                "  Commands: hcfsmliwaq  ";
+                "  Commands: hcfsmliwadq  ";
             int len = snprintf(nullptr, 0, format,
                                algorithm_ == WOLFF ? "Wolff" : "Metropolis",
                                world_->get_temp(), world_->net_magnetization(),
@@ -426,6 +428,52 @@ public:
     {
         this_thread::sleep_for(std::chrono::milliseconds(get_delay()));
     }
+
+    string state_filename() const
+    {
+        auto format = "%dsteps-%s-temp%.6f";
+        int len = snprintf(nullptr, 0, format,
+                           steps_,
+                           algorithm_ == WOLFF ? "Wolff" : "Metropolis",
+                           world_->get_temp()) + 1;
+        vector<char> chars(len);
+        snprintf(&chars[0], chars.size(), format,
+                 steps_,
+                 algorithm_ == WOLFF ? "Wolff" : "Metropolis",
+                 world_->get_temp());
+            
+        return string(&chars[0]);
+    }
+
+    
+    void dump_state_bin()
+    {
+        auto filename = state_filename();
+        ofstream file(filename, ofstream::out | ofstream::binary);
+        auto file_it = ostreambuf_iterator<char>(file);
+        // Incrementation operation on ostreambuf_iterator doesn't do anything.
+        *file_it = world_->getRows() / 256;
+        *file_it = world_->getRows() % 256;
+        *file_it = world_->getCols() / 256;
+        *file_it = world_->getCols() % 256;        
+        copy(begin(world_->data()), end(world_->data()), file_it);
+        file.close();
+    }
+    
+    void dump_state_txt()
+    {
+        auto filename = state_filename();
+        ofstream file(filename);
+        for (int r = 0; r < world_->getRows(); r++)
+        {
+            for (int c = 0; c < world_->getCols(); c++)
+            {
+                file << int(world_->get(r,c)) << ' ';
+            }
+            file << endl;
+        }
+        file.close();
+    }
     
     // Returns whether to exit
     KeyAction check_for_key()
@@ -465,6 +513,9 @@ public:
                 case 'a': // algorithm
                     change_algorithm();
                     steps_ = accepted_ = 0;
+                    break;
+                case 'd': // dump
+                    dump_state_txt(); // dump_state_bin();
                     break;
                 case 'q':
                     return EXIT;
@@ -571,7 +622,7 @@ int main_fb(int fbfd, int steps_per_generation,
 
 int main(int argc, char* argv[])
 {
-    if (argc == 1 or argv[1][0] == 'h' or argc > 7)
+    if (argc == 1 or argv[1][0] == 'h' or argv[1][0] == '?' or argc > 7)
     {
         printf("Usage: "
                "%s <temp> [steps_per_generation] [delay (ms)] [init fraction] [seed] [prefer_txt]\n",
