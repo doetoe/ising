@@ -2,11 +2,19 @@
 
 This is a fast implementation of a simulation of spin dynamics according to the [Ising Model](https://en.wikipedia.org/wiki/Ising_model) on Linux.
 
-When available, e.g. when executing the program in a non-graphical mode (Ctrl-Alt-F1), the full framebuffer is used so that every pixel is a particle. When the framebuffer is not available, the present terminal window is used, in which every character is a particle. In both cases we have periodic boundaries.
+When available, e.g. when executing the program in a non-graphical mode (Ctrl-Alt-F1), the full framebuffer is used so that every pixel is a particle. 
 
-Note that you may have to be a superuser to have permissions to use the framebuffer. To get a snapshot of the framebuffer, you can use a program like `fbgrab`, or you can dump its contents using the `d` command (see below) and convert it using `to-img.py`.
+![Framebuffer screenshot](/screenshots/ising-fb.png)
+
+When the framebuffer is not available, the present terminal window is used, in which every character is a particle. In both cases we have periodic boundaries.
+
+![terminal screenshot](/screenshots/ising-term.png)
+
+Note that you may have to be a superuser to have permissions to use the framebuffer. To get a snapshot of the framebuffer, you can use a program like `fbgrab`, or you can dump its contents using the `d` command (see below) and convert it using the provided `to-img.py`.
 
 Finally, the text-based output will look better or worse depending on the terminal emulator you are using. The fastest and best looking one that I tried was `rxvt-unicode` (`urxvt`).
+
+![urxvt screenshot](/screenshots/ising-urxvt.png)
 
 ### Usage ###
 
@@ -28,7 +36,7 @@ There is interaction as well. Commands are
 * i     -- toggle info display
 * h,c   -- hotter, colder
 * f,s   -- faster, slower
-* m,l   -- more, less
+* m,l   -- more, less (flips per step)
 * w     -- step in Wolff cluster algorithm
 * a     -- toggle algorithm (Wolff/Metropolis)
 * d     -- dump state in a file of -1s and 1s. Filename %dsteps-%s-temp%.6f
